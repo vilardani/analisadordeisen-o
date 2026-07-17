@@ -81,7 +81,7 @@
                 <select id="matriz" class="border p-2 rounded w-full" onchange="carregarDisciplinas()"><option value="">Selecione a Matriz</option></select>
             </div>
             <div>
-                <label class="block text-xs font-semibold text-gray-600 mb-1">RA do Aluno</label>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">RA do Aluno *</label>
                 <input type="text" id="ra" placeholder="Registro acadêmico" class="border p-2 rounded w-full">
             </div>
         </div>
@@ -433,12 +433,27 @@
 
         // ---------- Exportação ----------
         const HEADERS = [
-            'CODCOLIGADA', 'CURSO', 'CÓDIGO DA MATRIZ DESTINO', 'IDHABILITACAOFILIAL', 'CODDISC', 'NOME',
-            'CPF ALUNO', 'RA', 'IDPERLET', 'CODSTATUS', 'CARGAHORARIA', 'NOTA', 'FALTAS', 'NUMCREDITOS',
-            'EXCLUSIVO', 'CODINST', 'CODPROF', 'IDHISTDISCFACEXT', 'CODDISCEXT', 'NOMEDISCEXT',
-            'ANOSEMESTREEXT', 'CHEXT', 'NUMCREDITOSEXT', 'NOTAEXT', 'FALTAEXT', 'STATUSEXT',
-            'NOME INSTITUIÇÃO', 'INSTITUICAOEXT'
+            'CODCOLIGADA', 'RA', 'CODDISC', 'NOME', 'IDPERLET', 'IDHABILITACAOFILIAL', 'CODSTATUS',
+            'CARGAHORARIA', 'NOTA', 'FALTAS', 'NUMCREDITOS', 'EXCLUSIVO', 'CODINST', 'CODPROF',
+            'IDHISTDISCFACEXT', 'CODDISCEXT', 'NOMEDISCEXT', 'ANOSEMESTREEXT', 'CHEXT',
+            'NUMCREDITOSEXT', 'NOTAEXT', 'FALTAEXT', 'STATUSEXT', 'INSTITUICAOEXT'
         ];
+
+        function paraBytesCP1252(str) {
+            const bytes = new Uint8Array(str.length);
+            for (let i = 0; i < str.length; i++) {
+                const code = str.charCodeAt(i);
+                bytes[i] = code <= 0xFF ? code : 0x3F; // '?' para caracteres fora do Latin-1
+            }
+            return bytes;
+        }
+
+        function linhaCSV(valores) {
+            return valores.map(v => {
+                const s = (v === null || v === undefined) ? '' : String(v);
+                return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            }).join(';');
+        }
 
         function exportarDados() {
             const status = document.getElementById('statusExportacao');
@@ -453,6 +468,7 @@
             const erros = [];
             if (cpf.length !== 11) erros.push('CPF do aluno inválido (11 dígitos).');
             if (!nome) erros.push('Nome completo é obrigatório.');
+            if (!ra) erros.push('RA do aluno é obrigatório.');
             if (!curso) erros.push('Selecione o curso.');
             if (!matrizCode) erros.push('Selecione a matriz de destino.');
             if (!idperlet) erros.push('Informe o Período Letivo (ID).');
@@ -489,14 +505,11 @@
                 const nota = Number(notaExt);
                 registros.push({
                     'CODCOLIGADA': 20,
-                    'CURSO': curso,
-                    'CÓDIGO DA MATRIZ DESTINO': matrizCode,
-                    'IDHABILITACAOFILIAL': idHabilitacaoFilial,
+                    'RA': ra,
                     'CODDISC': tr.dataset.coddisc,
                     'NOME': tr.dataset.disciplina,
-                    'CPF ALUNO': cpf,
-                    'RA': ra,
                     'IDPERLET': idperlet,
+                    'IDHABILITACAOFILIAL': idHabilitacaoFilial,
                     'CODSTATUS': 1151,
                     'CARGAHORARIA': Number(tr.dataset.ch) || tr.dataset.ch,
                     'NOTA': nota,
@@ -514,7 +527,6 @@
                     'NOTAEXT': nota,
                     'FALTAEXT': 0,
                     'STATUSEXT': 1143,
-                    'NOME INSTITUIÇÃO': ies,
                     'INSTITUICAOEXT': instituicoesMap.has(ies) ? instituicoesMap.get(ies) : ''
                 });
             });
@@ -532,11 +544,19 @@
                 return;
             }
 
-            const ws = XLSX.utils.json_to_sheet(registros, { header: HEADERS });
-            const wbOut = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wbOut, ws, 'MODELO ISENÇÃO');
-            const nomeArquivo = `Isencao_${cpf}.xlsx`;
-            XLSX.writeFile(wbOut, nomeArquivo);
+            const linhas = [HEADERS, ...registros.map(r => HEADERS.map(h => r[h]))].map(linhaCSV);
+            const conteudo = linhas.join('\r\n') + '\r\n';
+            const bytesArquivo = paraBytesCP1252(conteudo);
+            const blob = new Blob([bytesArquivo], { type: 'text/csv' });
+            const nomeArquivo = `MODELO_ISENCAO - ${(nome || ra).toUpperCase()}.csv`;
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = nomeArquivo;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
 
             status.textContent = `Arquivo "${nomeArquivo}" exportado com ${registros.length} disciplina(s).`;
             status.className = 'text-sm font-medium text-[#D11C5C]';
