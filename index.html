@@ -93,12 +93,17 @@
             </div>
         </div>
 
+        <div class="flex items-center gap-2 mb-3">
+            <input type="checkbox" id="iesUnica" class="w-4 h-4 accent-[#D11C5C] cursor-pointer">
+            <label for="iesUnica" class="text-sm text-gray-700 cursor-pointer">IES de origem única — replicar a instituição da 1ª disciplina para as demais</label>
+        </div>
+
         <div id="tabelaContainer" class="overflow-x-auto shadow-sm rounded-lg border mb-4">
             <table class="min-w-full bg-white text-xs" id="tabelaIsencao">
                 <thead class="bg-[#D11C5C] text-white uppercase">
                     <tr>
                         <th class="p-2 border">Período</th><th class="p-2 border">Cód.</th><th class="p-2 border">Disciplina</th>
-                        <th class="p-2 border">CH</th><th class="p-2 border min-w-[260px]">IES Origem</th><th class="p-2 border">Disc. Origem</th>
+                        <th class="p-2 border">CH</th><th class="p-2 border min-w-[260px]">IES Origem</th><th class="p-2 border min-w-[220px]">Disc. Origem</th>
                         <th class="p-2 border">Cód. Origem</th><th class="p-2 border">CH Origem</th><th class="p-2 border">Créditos</th>
                         <th class="p-2 border">Ano/Sem</th><th class="p-2 border">Nota</th>
                     </tr>
@@ -242,17 +247,19 @@
             const curso = document.getElementById('curso').value;
             const selectMatriz = document.getElementById('matriz');
             selectMatriz.innerHTML = '<option value="">Selecione a Matriz</option>';
-            const vistos = new Set();
+            const vistos = new Map();
             ofertas
                 .filter(o => o.curso === curso)
                 .forEach(o => {
-                    if (!vistos.has(o.matrizCode)) {
-                        vistos.add(o.matrizCode);
-                        const opt = document.createElement('option');
-                        opt.value = o.matrizCode;
-                        opt.textContent = o.matrizDesc ? `${o.matrizCode} — ${o.matrizDesc}` : o.matrizCode;
-                        selectMatriz.appendChild(opt);
-                    }
+                    if (!vistos.has(o.matrizCode)) vistos.set(o.matrizCode, o.matrizDesc);
+                });
+            [...vistos.entries()]
+                .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }))
+                .forEach(([codigo, desc]) => {
+                    const opt = document.createElement('option');
+                    opt.value = codigo;
+                    opt.textContent = desc ? `${codigo} — ${desc}` : codigo;
+                    selectMatriz.appendChild(opt);
                 });
             limparTabela();
         }
@@ -304,7 +311,7 @@
                     <td class="p-2 border ies-wrapper min-w-[260px]">
                         <input type="text" class="ies-input w-full border rounded text-xs p-1" placeholder="Buscar IES..." autocomplete="off">
                     </td>
-                    <td class="p-2 border"><input type="text" class="nome-ext w-full border rounded text-xs p-1"></td>
+                    <td class="p-2 border min-w-[220px]"><input type="text" class="nome-ext w-full border rounded text-xs p-1"></td>
                     <td class="p-2 border"><input type="text" class="cod-ext w-full border rounded text-xs p-1"></td>
                     <td class="p-2 border"><input type="number" min="0" class="ch-ext w-full border rounded text-xs p-1"></td>
                     <td class="p-2 border"><input type="number" min="0" class="creditos-ext w-full border rounded text-xs p-1"></td>
@@ -315,8 +322,39 @@
                 ativarAutocompleteIES(tr.querySelector('.ies-input'));
             });
 
+            aplicarBloqueioIESUnica();
             document.getElementById('btnExportar').disabled = false;
         }
+
+        // ---------- IES de origem única (replica a 1ª linha para as demais) ----------
+        function aplicarBloqueioIESUnica() {
+            const unica = document.getElementById('iesUnica').checked;
+            const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
+            linhas.forEach((tr, idx) => {
+                if (idx === 0) return;
+                const input = tr.querySelector('.ies-input');
+                input.disabled = unica;
+                input.classList.toggle('bg-gray-100', unica);
+                input.classList.toggle('cursor-not-allowed', unica);
+            });
+        }
+
+        function propagarIESSeUnica() {
+            if (!document.getElementById('iesUnica').checked) return;
+            const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
+            if (linhas.length < 2) return;
+            const valor = linhas[0].querySelector('.ies-input').value;
+            linhas.slice(1).forEach(tr => {
+                const input = tr.querySelector('.ies-input');
+                input.value = valor;
+                marcarValidadeIES(input, true);
+            });
+        }
+
+        document.getElementById('iesUnica').addEventListener('change', () => {
+            aplicarBloqueioIESUnica();
+            propagarIESSeUnica();
+        });
 
         // ---------- Autocomplete de IES (só aceita valores da coluna D de INSTITUIÇÕES) ----------
         let debounceTimer = null;
@@ -341,6 +379,7 @@
                     input.value = '';
                 }
                 marcarValidadeIES(input, true);
+                propagarIESSeUnica();
             }, 150));
         }
 
@@ -369,6 +408,7 @@
                     input.value = m.display;
                     marcarValidadeIES(input, true);
                     fecharSugestoes(wrapper);
+                    propagarIESSeUnica();
                 });
                 box.appendChild(item);
             });
