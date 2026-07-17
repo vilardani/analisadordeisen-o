@@ -74,6 +74,10 @@
                 <label class="block text-xs font-semibold text-gray-600 mb-1">Matriz de Destino *</label>
                 <select id="matriz" class="border p-2 rounded w-full" onchange="carregarDisciplinas()"><option value="">Selecione a Matriz</option></select>
             </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">RA do Aluno</label>
+                <input type="text" id="ra" placeholder="Registro acadêmico" class="border p-2 rounded w-full">
+            </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 p-4 bg-gray-50 rounded-lg border">
@@ -94,7 +98,7 @@
                 <thead class="bg-[#D11C5C] text-white uppercase">
                     <tr>
                         <th class="p-2 border">Período</th><th class="p-2 border">Cód.</th><th class="p-2 border">Disciplina</th>
-                        <th class="p-2 border">CH</th><th class="p-2 border">IES Origem</th><th class="p-2 border">Disc. Origem</th>
+                        <th class="p-2 border">CH</th><th class="p-2 border min-w-[260px]">IES Origem</th><th class="p-2 border">Disc. Origem</th>
                         <th class="p-2 border">Cód. Origem</th><th class="p-2 border">CH Origem</th><th class="p-2 border">Créditos</th>
                         <th class="p-2 border">Ano/Sem</th><th class="p-2 border">Nota</th>
                     </tr>
@@ -297,7 +301,7 @@
                     <td class="p-2 border text-center">${d.coddisc}</td>
                     <td class="p-2 border font-medium">${d.disciplina}</td>
                     <td class="p-2 border text-center">${d.ch ?? '-'}</td>
-                    <td class="p-2 border ies-wrapper">
+                    <td class="p-2 border ies-wrapper min-w-[260px]">
                         <input type="text" class="ies-input w-full border rounded text-xs p-1" placeholder="Buscar IES..." autocomplete="off">
                     </td>
                     <td class="p-2 border"><input type="text" class="nome-ext w-full border rounded text-xs p-1"></td>
@@ -384,6 +388,7 @@
             const status = document.getElementById('statusExportacao');
             const cpf = norm(document.getElementById('cpf').value).replace(/\D/g, '');
             const nome = norm(document.getElementById('nome').value);
+            const ra = norm(document.getElementById('ra').value);
             const curso = document.getElementById('curso').value;
             const matrizCode = document.getElementById('matriz').value;
             const idperlet = norm(document.getElementById('idperlet').value);
@@ -434,7 +439,7 @@
                     'CODDISC': tr.dataset.coddisc,
                     'NOME': tr.dataset.disciplina,
                     'CPF ALUNO': cpf,
-                    'RA': '',
+                    'RA': ra,
                     'IDPERLET': idperlet,
                     'CODSTATUS': 1151,
                     'CARGAHORARIA': Number(tr.dataset.ch) || tr.dataset.ch,
