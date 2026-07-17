@@ -27,6 +27,12 @@
         .autocomplete-item:hover, .autocomplete-item.active { background: var(--afya-magenta-light); }
         .ies-wrapper { position: relative; }
         .linha-incompleta { background-color: #fef3c7 !important; }
+        #tabelaIsencao thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: var(--afya-magenta);
+        }
         input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--afya-magenta) !important;
@@ -98,7 +104,7 @@
             <label for="iesUnica" class="text-sm text-gray-700 cursor-pointer">IES de origem única — replicar a instituição da 1ª disciplina para as demais</label>
         </div>
 
-        <div id="tabelaContainer" class="overflow-x-auto shadow-sm rounded-lg border mb-4">
+        <div id="tabelaContainer" class="overflow-x-auto overflow-y-auto max-h-[65vh] shadow-sm rounded-lg border mb-4">
             <table class="min-w-full bg-white text-xs" id="tabelaIsencao">
                 <thead class="bg-[#D11C5C] text-white uppercase">
                     <tr>
@@ -320,13 +326,22 @@
                 `;
                 tbody.appendChild(tr);
                 ativarAutocompleteIES(tr.querySelector('.ies-input'));
+                OUTROS_CAMPOS_SELECTORS.forEach(sel => {
+                    tr.querySelector(sel).addEventListener('input', propagarIESSeUnica);
+                });
             });
 
             aplicarBloqueioIESUnica();
             document.getElementById('btnExportar').disabled = false;
         }
 
-        // ---------- IES de origem única (replica a 1ª linha para as demais) ----------
+        // ---------- IES de origem única (replica a 1ª linha só nas disciplinas que estão sendo preenchidas) ----------
+        const OUTROS_CAMPOS_SELECTORS = ['.nome-ext', '.cod-ext', '.ch-ext', '.creditos-ext', '.anosem-ext', '.nota-ext'];
+
+        function linhaTemOutrosCamposPreenchidos(tr) {
+            return OUTROS_CAMPOS_SELECTORS.some(sel => tr.querySelector(sel).value.trim() !== '');
+        }
+
         function aplicarBloqueioIESUnica() {
             const unica = document.getElementById('iesUnica').checked;
             const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
@@ -346,7 +361,8 @@
             const valor = linhas[0].querySelector('.ies-input').value;
             linhas.slice(1).forEach(tr => {
                 const input = tr.querySelector('.ies-input');
-                input.value = valor;
+                const preenchida = linhaTemOutrosCamposPreenchidos(tr);
+                input.value = preenchida ? valor : '';
                 marcarValidadeIES(input, true);
             });
         }
