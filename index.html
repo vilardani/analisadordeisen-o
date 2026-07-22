@@ -323,39 +323,47 @@
                 tbody.appendChild(tr);
                 ativarAutocompleteIES(tr.querySelector('.ies-input'));
                 OUTROS_CAMPOS_SELECTORS.forEach(sel => {
-                    tr.querySelector(sel).addEventListener('input', propagarIESSeUnica);
+                    tr.querySelector(sel).addEventListener('input', propagarParaOutrasLinhas);
                 });
             });
 
-            aplicarBloqueioIESUnica();
+            reiniciarReferenciaIESUnica();
             document.getElementById('btnExportar').disabled = false;
         }
 
-        // ---------- IES de origem única (replica a 1ª linha só nas disciplinas que estão sendo preenchidas) ----------
+        // ---------- IES de origem única (replica a partir da 1ª disciplina que o usuário efetivamente preencher, não a 1ª da tabela) ----------
         const OUTROS_CAMPOS_SELECTORS = ['.nome-ext', '.cod-ext', '.ch-ext', '.creditos-ext', '.anosem-ext', '.nota-ext'];
+        let linhaReferenciaIES = null;
 
         function linhaTemOutrosCamposPreenchidos(tr) {
             return OUTROS_CAMPOS_SELECTORS.some(sel => tr.querySelector(sel).value.trim() !== '');
         }
 
-        function aplicarBloqueioIESUnica() {
-            const unica = document.getElementById('iesUnica').checked;
-            const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
-            linhas.forEach((tr, idx) => {
-                if (idx === 0) return;
+        function reiniciarReferenciaIESUnica() {
+            linhaReferenciaIES = null;
+            [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc).forEach(tr => {
                 const input = tr.querySelector('.ies-input');
-                input.disabled = unica;
-                input.classList.toggle('bg-gray-100', unica);
-                input.classList.toggle('cursor-not-allowed', unica);
+                input.disabled = false;
+                input.classList.remove('bg-gray-100', 'cursor-not-allowed');
             });
         }
 
-        function propagarIESSeUnica() {
-            if (!document.getElementById('iesUnica').checked) return;
-            const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
-            if (linhas.length < 2) return;
-            const valor = linhas[0].querySelector('.ies-input').value;
-            linhas.slice(1).forEach(tr => {
+        function definirReferenciaIES(tr) {
+            linhaReferenciaIES = tr;
+            [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(t => t.dataset.coddisc).forEach(outra => {
+                if (outra === tr) return;
+                const input = outra.querySelector('.ies-input');
+                input.disabled = true;
+                input.classList.add('bg-gray-100', 'cursor-not-allowed');
+            });
+            propagarParaOutrasLinhas();
+        }
+
+        function propagarParaOutrasLinhas() {
+            if (!linhaReferenciaIES) return;
+            const valor = linhaReferenciaIES.querySelector('.ies-input').value;
+            [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc).forEach(tr => {
+                if (tr === linhaReferenciaIES) return;
                 const input = tr.querySelector('.ies-input');
                 const preenchida = linhaTemOutrosCamposPreenchidos(tr);
                 input.value = preenchida ? valor : '';
@@ -363,9 +371,32 @@
             });
         }
 
+        function aoIESConfirmada(tr) {
+            if (!document.getElementById('iesUnica').checked) return;
+            const input = tr.querySelector('.ies-input');
+            if (!linhaReferenciaIES) {
+                if (input.value && instituicoesMap.has(input.value)) definirReferenciaIES(tr);
+                return;
+            }
+            if (linhaReferenciaIES === tr) {
+                if (!input.value) {
+                    reiniciarReferenciaIESUnica();
+                } else {
+                    propagarParaOutrasLinhas();
+                }
+            }
+        }
+
         document.getElementById('iesUnica').addEventListener('change', () => {
-            aplicarBloqueioIESUnica();
-            propagarIESSeUnica();
+            reiniciarReferenciaIESUnica();
+            if (document.getElementById('iesUnica').checked) {
+                const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
+                const jaPreenchida = linhas.find(tr => {
+                    const v = tr.querySelector('.ies-input').value;
+                    return v && instituicoesMap.has(v);
+                });
+                if (jaPreenchida) definirReferenciaIES(jaPreenchida);
+            }
         });
 
         // ---------- Autocomplete de IES (só aceita valores da coluna D de INSTITUIÇÕES) ----------
@@ -391,7 +422,7 @@
                     input.value = '';
                 }
                 marcarValidadeIES(input, true);
-                propagarIESSeUnica();
+                aoIESConfirmada(input.closest('tr'));
             }, 150));
         }
 
@@ -420,7 +451,7 @@
                     input.value = m.display;
                     marcarValidadeIES(input, true);
                     fecharSugestoes(wrapper);
-                    propagarIESSeUnica();
+                    aoIESConfirmada(input.closest('tr'));
                 });
                 box.appendChild(item);
             });
