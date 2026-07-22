@@ -95,9 +95,15 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-2 mb-3">
-            <input type="checkbox" id="iesUnica" class="w-4 h-4 accent-[#D11C5C] cursor-pointer">
-            <label for="iesUnica" class="text-sm text-gray-700 cursor-pointer">IES de origem única — replicar a instituição da 1ª disciplina para as demais</label>
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="iesUnica" class="w-4 h-4 accent-[#D11C5C] cursor-pointer">
+                <label for="iesUnica" class="text-sm text-gray-700 cursor-pointer whitespace-nowrap">IES de origem única</label>
+            </div>
+            <div class="ies-wrapper relative flex-1 min-w-[260px] max-w-[420px]">
+                <input type="text" id="iesPadrao" placeholder="Buscar IES..." autocomplete="off" disabled
+                       class="ies-input w-full border rounded text-sm p-2 bg-gray-100 cursor-not-allowed">
+            </div>
         </div>
 
         <div id="tabelaContainer" class="overflow-x-auto overflow-y-auto max-h-[65vh] shadow-sm rounded-lg border mb-4">
@@ -322,82 +328,34 @@
                 `;
                 tbody.appendChild(tr);
                 ativarAutocompleteIES(tr.querySelector('.ies-input'));
-                OUTROS_CAMPOS_SELECTORS.forEach(sel => {
-                    tr.querySelector(sel).addEventListener('input', propagarParaOutrasLinhas);
-                });
             });
 
-            reiniciarReferenciaIESUnica();
+            aplicarBloqueioLinhasIES();
             document.getElementById('btnExportar').disabled = false;
         }
 
-        // ---------- IES de origem única (replica a partir da 1ª disciplina que o usuário efetivamente preencher, não a 1ª da tabela) ----------
-        const OUTROS_CAMPOS_SELECTORS = ['.nome-ext', '.cod-ext', '.ch-ext', '.creditos-ext', '.anosem-ext', '.nota-ext'];
-        let linhaReferenciaIES = null;
-
-        function linhaTemOutrosCamposPreenchidos(tr) {
-            return OUTROS_CAMPOS_SELECTORS.some(sel => tr.querySelector(sel).value.trim() !== '');
-        }
-
-        function reiniciarReferenciaIESUnica() {
-            linhaReferenciaIES = null;
+        // ---------- IES de origem única: campo fixo no topo, usado na exportação para todas as disciplinas ----------
+        function aplicarBloqueioLinhasIES() {
+            const unica = document.getElementById('iesUnica').checked;
             [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc).forEach(tr => {
                 const input = tr.querySelector('.ies-input');
-                input.disabled = false;
-                input.classList.remove('bg-gray-100', 'cursor-not-allowed');
+                input.disabled = unica;
+                input.classList.toggle('bg-gray-100', unica);
+                input.classList.toggle('cursor-not-allowed', unica);
+                if (unica) { input.value = ''; marcarValidadeIES(input, true); }
             });
-        }
-
-        function definirReferenciaIES(tr) {
-            linhaReferenciaIES = tr;
-            [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(t => t.dataset.coddisc).forEach(outra => {
-                if (outra === tr) return;
-                const input = outra.querySelector('.ies-input');
-                input.disabled = true;
-                input.classList.add('bg-gray-100', 'cursor-not-allowed');
-            });
-            propagarParaOutrasLinhas();
-        }
-
-        function propagarParaOutrasLinhas() {
-            if (!linhaReferenciaIES) return;
-            const valor = linhaReferenciaIES.querySelector('.ies-input').value;
-            [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc).forEach(tr => {
-                if (tr === linhaReferenciaIES) return;
-                const input = tr.querySelector('.ies-input');
-                const preenchida = linhaTemOutrosCamposPreenchidos(tr);
-                input.value = preenchida ? valor : '';
-                marcarValidadeIES(input, true);
-            });
-        }
-
-        function aoIESConfirmada(tr) {
-            if (!document.getElementById('iesUnica').checked) return;
-            const input = tr.querySelector('.ies-input');
-            if (!linhaReferenciaIES) {
-                if (input.value && instituicoesMap.has(input.value)) definirReferenciaIES(tr);
-                return;
-            }
-            if (linhaReferenciaIES === tr) {
-                if (!input.value) {
-                    reiniciarReferenciaIESUnica();
-                } else {
-                    propagarParaOutrasLinhas();
-                }
-            }
         }
 
         document.getElementById('iesUnica').addEventListener('change', () => {
-            reiniciarReferenciaIESUnica();
-            if (document.getElementById('iesUnica').checked) {
-                const linhas = [...document.querySelectorAll('#tbodyDisciplinas tr')].filter(tr => tr.dataset.coddisc);
-                const jaPreenchida = linhas.find(tr => {
-                    const v = tr.querySelector('.ies-input').value;
-                    return v && instituicoesMap.has(v);
-                });
-                if (jaPreenchida) definirReferenciaIES(jaPreenchida);
-            }
+            const unica = document.getElementById('iesUnica').checked;
+            const iesPadrao = document.getElementById('iesPadrao');
+            iesPadrao.disabled = !unica;
+            iesPadrao.classList.toggle('bg-gray-100', !unica);
+            iesPadrao.classList.toggle('cursor-not-allowed', !unica);
+            if (!unica) { iesPadrao.value = ''; marcarValidadeIES(iesPadrao, true); }
+            aplicarBloqueioLinhasIES();
         });
+        ativarAutocompleteIES(document.getElementById('iesPadrao'));
 
         // ---------- Autocomplete de IES (só aceita valores da coluna D de INSTITUIÇÕES) ----------
         let debounceTimer = null;
@@ -422,7 +380,6 @@
                     input.value = '';
                 }
                 marcarValidadeIES(input, true);
-                aoIESConfirmada(input.closest('tr'));
             }, 150));
         }
 
@@ -451,7 +408,6 @@
                     input.value = m.display;
                     marcarValidadeIES(input, true);
                     fecharSugestoes(wrapper);
-                    aoIESConfirmada(input.closest('tr'));
                 });
                 box.appendChild(item);
             });
@@ -491,6 +447,9 @@
             const idperlet = norm(document.getElementById('idperlet').value);
             const codinst = norm(document.getElementById('codinst').value);
 
+            const iesUnicaMarcada = document.getElementById('iesUnica').checked;
+            const iesPadrao = norm(document.getElementById('iesPadrao').value);
+
             const erros = [];
             if (!nome) erros.push('Nome completo é obrigatório.');
             if (!ra) erros.push('RA do aluno é obrigatório.');
@@ -498,6 +457,8 @@
             if (!matrizCode) erros.push('Selecione a matriz de destino.');
             if (!idperlet) erros.push('Informe o Período Letivo (ID).');
             if (!codinst) erros.push('Informe o Código da Instituição (CODINST).');
+            if (iesUnicaMarcada && !iesPadrao) erros.push('Informe a IES de origem única no topo.');
+            if (iesUnicaMarcada && iesPadrao && !instituicoesMap.has(iesPadrao)) erros.push('A IES de origem única não é válida — selecione uma opção da lista.');
 
             const linhasRef = ofertas.filter(o => o.curso === curso && o.matrizCode === matrizCode);
             const idHabilitacaoFilial = linhasRef.length ? linhasRef[0].idHabilitacaoFilial : '';
@@ -509,7 +470,8 @@
 
             linhasTabela.forEach(tr => {
                 tr.classList.remove('linha-incompleta');
-                const ies = tr.querySelector('.ies-input').value.trim();
+                const iesRowRaw = tr.querySelector('.ies-input').value.trim();
+                const ies = iesUnicaMarcada ? iesPadrao : iesRowRaw;
                 const nomeExt = tr.querySelector('.nome-ext').value.trim();
                 const codExt = tr.querySelector('.cod-ext').value.trim();
                 const chExt = tr.querySelector('.ch-ext').value.trim();
@@ -517,7 +479,7 @@
                 const anosemExt = tr.querySelector('.anosem-ext').value.trim();
                 const notaExt = tr.querySelector('.nota-ext').value.trim();
 
-                const algumPreenchido = ies || nomeExt || codExt || chExt || credExt || anosemExt || notaExt;
+                const algumPreenchido = iesRowRaw || nomeExt || codExt || chExt || credExt || anosemExt || notaExt;
                 if (!algumPreenchido) return; // disciplina não solicitada para isenção
 
                 const todosPreenchidos = ies && nomeExt && codExt && chExt && credExt && anosemExt && notaExt;
